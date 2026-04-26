@@ -21,8 +21,8 @@ Observe’s Terraform provider supports `observe_dashboard`, and the dashboard b
 From your Mac terminal:
 
 ```bash id="x62diu"
-mkdir observe-oac
-cd observe-oac
+mkdir obseng-observe
+cd obseng-observe
 
 git init -b main
 ```
@@ -63,7 +63,7 @@ touch envs/prod/connect-dashboards.tf
 Your repo should now look like this:
 
 ```text id="bpy6d8"
-observe-oac/
+obseng-observe/
 ├── README.md
 ├── .gitignore
 ├── versions.tf
@@ -465,16 +465,16 @@ git commit -m "Add Connect RBAC and dashboard modules"
 Create two HCP Terraform/Terraform Cloud workspaces:
 
 ```text id="i7mfxe"
-observe-oac-nonprod
-observe-oac-prod
+obseng-observe-nonprod
+obseng-observe-prod
 ```
 
 Use this setup:
 
 | Workspace             | Working Directory | Branch | Auto Apply   |
 | --------------------- | ----------------- | ------ | ------------ |
-| `observe-oac-nonprod` | `envs/nonprod`    | `main` | Optional yes |
-| `observe-oac-prod`    | `envs/prod`       | `main` | No at first  |
+| `obseng-observe-nonprod` | `envs/nonprod`    | `main` | Optional yes |
+| `obseng-observe-prod`    | `envs/prod`       | `main` | No at first  |
 
 HCP Terraform can run speculative plans for pull requests and can also trigger runs from VCS changes. Workspaces can be configured to trigger only when certain directories change. ([HashiCorp Developer][5])
 
@@ -532,7 +532,7 @@ git commit -m "Add nonprod and prod Observe environment configuration"
 Push to GitHub:
 
 ```bash id="qq4r6r"
-git remote add origin git@github.com:YOUR_ORG/observe-oac.git
+git remote add origin git@github.com:YOUR_ORG/obseng-observe.git
 git push -u origin main
 ```
 
