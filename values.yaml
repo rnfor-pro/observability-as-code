@@ -1,0 +1,115 @@
+cat > grafana-mcp/values.yaml <<'EOF'
+replicaCount: 1
+
+image:
+  registry: YOUR_JFROG_REGISTRY
+  repository: cso/obseng-keystone-infra/grafana/mcp-grafana
+  tag: "0.13.1"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+namespace: np-keystone
+
+grafana:
+  url: "http://np-grafana.np-keystone.svc.cluster.local:3000"
+  tokenSecretName: grafana-mcp-token
+  tokenSecretKey: token
+
+serviceAccount:
+  create: true
+  name: grafana-mcp
+  automountServiceAccountToken: false
+
+podAnnotations: {}
+
+podLabels:
+  app.kubernetes.io/part-of: keystone-pipeline
+  app.kubernetes.io/component: grafana-mcp
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+
+mcp:
+  args:
+    - "-t"
+    - "streamable-http"
+    - "--address"
+    - "0.0.0.0:8000"
+    - "--endpoint-path"
+    - "/mcp"
+    - "--log-level"
+    - "info"
+    - "--max-loki-log-limit"
+    - "100"
+
+    # Safety controls
+    - "--disable-write"
+    - "--disable-admin"
+    - "--disable-incident"
+    - "--disable-oncall"
+    - "--disable-alerting"
+    - "--disable-sift"
+    - "--disable-pyroscope"
+    - "--disable-rendering"
+    - "--disable-annotations"
+    - "--disable-proxied"
+    - "--disable-examples"
+    - "--disable-runpanelquery"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+
+probes:
+  liveness:
+    enabled: true
+    path: /healthz
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readiness:
+    enabled: true
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  startup:
+    enabled: true
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+EOF
