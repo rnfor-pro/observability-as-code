@@ -1,0 +1,137 @@
+name: Mirror Grafana MCP Image To JFrog
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/grafana-mcp-jfrog-mirror.yaml"
+      - "grafana-mcp/**"
+
+  workflow_dispatch:
+    inputs:
+      mcp_version:
+        description: "Grafana MCP image version to mirror"
+        required: true
+        default: "0.13.1"
+      environment_tag:
+        description: "Optional mutable environment tag"
+        required: true
+        default: "non-prod"
+        type: choice
+        options:
+          - dev
+          - non-prod
+          - prod
+          - none
+
+permissions:
+  contents: write
+
+env:
+  SOURCE_IMAGE: docker.io/grafana/mcp-grafana
+  IMAGE_NAME: grafana-mcp
+  JFROG_REPO_PATH: cso/obseng-keystone-infra/grafana/mcp-grafana
+
+jobs:
+  mirror-grafana-mcp:
+    runs-on: sw-ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          VERSION="${{ github.event.inputs.mcp_version }}"
+          ENV_TAG="${{ github.event.inputs.environment_tag }}"
+
+          if [ -z "$VERSION" ]; then
+            VERSION="0.13.1"
+          fi
+
+          if [ -z "$ENV_TAG" ]; then
+            ENV_TAG="non-prod"
+          fi
+
+          DEST_IMAGE="${{ secrets.ARTIFACTORY_REGISTRY }}/${JFROG_REPO_PATH}"
+
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "ENV_TAG=$ENV_TAG" >> "$GITHUB_OUTPUT"
+          echo "DEST_IMAGE=$DEST_IMAGE" >> "$GITHUB_OUTPUT"
+
+          echo "Source image: ${SOURCE_IMAGE}:${VERSION}"
+          echo "Destination image: ${DEST_IMAGE}:${VERSION}"
+          echo "Environment tag: ${ENV_TAG}"
+
+      - name: Log in to JFrog Docker Registry
+        run: |
+          echo "${{ secrets.ARTIFACTORY_API_KEY }}" | docker login "${{ secrets.ARTIFACTORY_REGISTRY }}" \
+            --username "${{ secrets.ARTIFACTORY_USERNAME }}" \
+            --password-stdin
+
+      - name: Pull official Grafana MCP image
+        run: |
+          docker pull "${SOURCE_IMAGE}:${{ steps.meta.outputs.VERSION }}"
+
+      - name: Tag image for JFrog
+        run: |
+          docker tag "${SOURCE_IMAGE}:${{ steps.meta.outputs.VERSION }}" \
+            "${{ steps.meta.outputs.DEST_IMAGE }}:${{ steps.meta.outputs.VERSION }}"
+
+          if [ "${{ steps.meta.outputs.ENV_TAG }}" != "none" ]; then
+            docker tag "${SOURCE_IMAGE}:${{ steps.meta.outputs.VERSION }}" \
+              "${{ steps.meta.outputs.DEST_IMAGE }}:${{ steps.meta.outputs.ENV_TAG }}"
+          fi
+
+      - name: Push immutable version tag to JFrog
+        run: |
+          docker push "${{ steps.meta.outputs.DEST_IMAGE }}:${{ steps.meta.outputs.VERSION }}"
+
+      - name: Push environment tag to JFrog
+        if: ${{ steps.meta.outputs.ENV_TAG != 'none' }}
+        run: |
+          docker push "${{ steps.meta.outputs.DEST_IMAGE }}:${{ steps.meta.outputs.ENV_TAG }}"
+
+      - name: Write or update images.csv
+        run: |
+          CSV_FILE="images.csv"
+          IMAGE_NAME="grafana-mcp"
+          VERSION="${{ steps.meta.outputs.VERSION }}"
+          ENV_TAG="${{ steps.meta.outputs.ENV_TAG }}"
+          DEST_IMAGE="${{ steps.meta.outputs.DEST_IMAGE }}"
+          LABELS="source=docker.io/grafana/mcp-grafana;component=grafana-mcp;namespace=np-keystone"
+
+          if [ ! -f "$CSV_FILE" ]; then
+            echo "Image Name,Tag,Location,Labels" > "$CSV_FILE"
+          fi
+
+          VERSION_ROW="$IMAGE_NAME,$VERSION,$DEST_IMAGE:$VERSION,$LABELS"
+
+          if ! grep -q "$IMAGE_NAME,$VERSION,$DEST_IMAGE:$VERSION" "$CSV_FILE"; then
+            echo "$VERSION_ROW" >> "$CSV_FILE"
+          fi
+
+          if [ "$ENV_TAG" != "none" ]; then
+            ENV_ROW="$IMAGE_NAME,$ENV_TAG,$DEST_IMAGE:$ENV_TAG,$LABELS"
+            if ! grep -q "$IMAGE_NAME,$ENV_TAG,$DEST_IMAGE:$ENV_TAG" "$CSV_FILE"; then
+              echo "$ENV_ROW" >> "$CSV_FILE"
+            fi
+          fi
+
+      - name: Commit and push images.csv
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          git add images.csv
+
+          if git diff --cached --quiet; then
+            echo "No changes to images.csv"
+            exit 0
+          fi
+
+          git commit -m "Update images.csv with Grafana MCP image metadata"
+          git pull origin "${{ github.ref_name }}" --rebase || echo "No upstream changes"
+          git push origin "HEAD:${{ github.ref_name }}"
