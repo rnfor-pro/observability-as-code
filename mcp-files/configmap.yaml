@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grafana-mcp.fullname" . }}-config
+  labels:
+    {{- include "grafana-mcp.labels" . | nindent 4 }}
+data:
+  GRAFANA_URL: {{ .Values.grafana.url | quote }}
+  GRAFANA_FORWARD_HEADERS: {{ printf "%t" .Values.grafana.forwardHeaders | quote }}
+  LOG_LEVEL: {{ .Values.logLevel | quote }}

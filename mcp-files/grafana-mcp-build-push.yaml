@@ -1,0 +1,96 @@
+name: Build, Push & Retrieve Grafana MCP Image To/From JFrog
+
+on:
+  push:
+    branches: [ develop ]          # matches your org branch convention
+    paths:
+      - 'docker/grafana-mcp/**'    # only trigger when Dockerfile or certs change
+  workflow_dispatch:               # allow manual trigger for version bumps
+
+jobs:
+  build-push-and-save:
+    runs-on: sw-ubuntu-latest      # your org's self-hosted runner label
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Log in to JFrog Docker Registry ─────────────────────────────────────
+      # Uses your org's composite action — same as all other services
+      - name: Log in to JFrog Docker Registry (for push)
+        uses: <your-org-actions-repo>/sw-build-deploy-docker-image-composite-action@v1
+        with:
+          image_registry: ${{ secrets.ARTIFACTORY_REGISTRY }}
+          image_registry_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          image_registry_api_key: ${{ secrets.ARTIFACTORY_API_KEY }}
+
+      # ── Parse image labels from Dockerfile ──────────────────────────────────
+      # Identical to your existing workflow — extracts title + version labels
+      - name: Parse all image LABELs from Dockerfile
+        id: meta
+        run: |
+          LABELS=$(awk '/^LABEL/ { $1=""; print substr($0,2) }' docker/grafana-mcp/Dockerfile | tr -d '\r')
+          LABEL_LIST=""
+          while read -r line; do
+            for keyval in $line; do
+              key=$(echo $keyval | cut -d'=' -f1)
+              val=$(echo $keyval | cut -d'=' --f2- | tr -d '"')
+              if [[ "$key" == "org.opencontainers.image.title" ]]; then
+                echo "IMAGE_NAME=$val" >> $GITHUB_OUTPUT
+              fi
+              if [[ "$key" == "org.opencontainers.image.version" ]]; then
+                echo "IMAGE_VERSION=$val" >> $GITHUB_OUTPUT
+              fi
+              LABEL_LIST="$LABEL_LIST$key=$val;"
+            done
+          done <<< "$LABELS"
+          echo "ALL_LABELS=$LABEL_LIST" >> $GITHUB_OUTPUT
+
+      # ── Build Docker image ───────────────────────────────────────────────────
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ steps.meta.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.IMAGE_VERSION }} \
+            docker/grafana-mcp/.
+
+      # ── Tag, Push for Each Env-Specific Tag, and Write/Update CSV ───────────
+      # Matches your org pattern exactly — loops dev/non-prod/prod
+      - name: Tag, Push for Each Env-Specific Tag, and Write/Update CSV
+        env:
+          REGISTRY: ${{ secrets.ARTIFACTORY_REGISTRY }}
+          REPO: <your-org>/obseng-keystone-infra        # match your repo path
+        run: |
+          IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
+          IMAGE_VERSION="${{ steps.meta.outputs.IMAGE_VERSION }}"
+          CSV_FILE=images.csv
+          LABELS="${{ steps.meta.outputs.ALL_LABELS }}"
+
+          # Write header if file doesn't exist, otherwise skip
+          if [ ! -f "$CSV_FILE" ]; then
+            echo "Image Name,Tag,Location,Labels" > $CSV_FILE
+          fi
+
+          for ENV in dev non-prod prod; do
+            REMOTE_REPO="$REGISTRY/$REPO/$IMAGE_NAME/${IMAGE_NAME}_${IMAGE_VERSION}"
+
+            # grafana-mcp does not need special casing (unlike redpanda)
+            TAG="$ENV"
+
+            docker tag $IMAGE_NAME:$IMAGE_VERSION $REMOTE_REPO:$TAG
+            docker push $REMOTE_REPO:$TAG
+
+            # Avoid duplicate CSV entries
+            if ! grep -q "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG" $CSV_FILE; then
+              echo "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG,\"$LABELS\"" >> $CSV_FILE
+            fi
+          done
+
+      # ── Commit images.csv back to repo ──────────────────────────────────────
+      - name: Commit and Push images.csv to repo
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git add images.csv
+          git commit -m "Update images.csv with latest grafana-mcp metadata" || echo "No changes to commit"
+          git pull origin ${{ github.ref_name }} --rebase || echo "No upstream changes"
+          git push origin ${{ github.ref_name }}

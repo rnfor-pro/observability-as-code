@@ -1,0 +1,179 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# grafana-mcp Helm Chart — Default Values
+#
+# Per-environment overrides live in:
+#   ci/values-dev.yaml
+#   ci/values-non-prod.yaml
+#   ci/values-prod.yaml
+#
+# Override at deploy time:
+#   helm upgrade --install grafana-mcp ./grafana-mcp \
+#     -n dev-keystone \
+#     -f ci/values-dev.yaml
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full release name
+fullnameOverride: ""
+
+# ── Environment label (applied to all resources) ─────────────────────────────
+environment: dev
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+image:
+  # Registry + repo path matching your org's JFrog Artifactory convention:
+  # docker.artifactory.<domain>.com/<org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_<appVersion>
+  registry: docker.artifactory.<your-domain>.com
+  repository: <your-org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.5.0
+  # Tag = environment name, set by the build workflow (dev / non-prod / prod)
+  tag: dev
+  pullPolicy: Always
+
+# ── MCP Server configuration ──────────────────────────────────────────────────
+mcp:
+  # Transport: streamable-http required for multi-client org-wide use
+  transport: streamable-http
+
+  # Read-only mode — always true for dev and prod; false allows dashboard writes in non-prod
+  disableWrite: true
+
+  # Enable Prometheus /metrics endpoint on port 9090
+  metrics: true
+
+  # Disable individual tool categories to reduce AI context window consumption.
+  # Available flags: oncall, incident, sift, alerting, annotations, dashboard,
+  #                  datasource, search, frontend-settings, navigation
+  disabledTools: []
+  # disabledTools:
+  #   - oncall
+  #   - incident
+  #   - sift
+
+# ── Grafana connection ────────────────────────────────────────────────────────
+grafana:
+  # In-cluster Grafana service URL — set per environment in values-<env>.yaml
+  url: http://grafana.dev-keystone.svc.cluster.local:3000
+
+  # Forward incoming auth headers to Grafana.
+  # Set true if your Grafana uses OIDC/SAML and you want per-user identity to flow through.
+  forwardHeaders: false
+
+  # Name of the K8s Secret containing GRAFANA_SERVICE_ACCOUNT_TOKEN.
+  # Created imperatively via kubectl (not committed to git).
+  tokenSecret: grafana-mcp-token
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logLevel: info
+
+# ── Replica count ─────────────────────────────────────────────────────────────
+replicaCount: 2
+
+# ── Deployment strategy ───────────────────────────────────────────────────────
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# ── Service ───────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  # cert-manager ClusterIssuer — matches your vault-issuer pattern
+  clusterIssuer: vault-issuer
+  host: mcp-grafana-dev.<your-domain>.com
+  tlsSecretName: grafana-mcp-dev-tls-secret
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Critical for MCP streamable-http — prevents nginx from killing long-lived connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+# ── ServiceAccount ────────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: grafana-mcp
+  automountServiceAccountToken: false
+  annotations: {}
+
+# ── Node scheduling — matches kube-state-metrics pattern ─────────────────────
+nodeSelector:
+  agentpool: otelcollect
+
+tolerations:
+  - key: "agentpool"
+    operator: "Equal"
+    value: "otelcollect"
+    effect: "NoSchedule"
+  - key: "agentpool"
+    operator: "Equal"
+    value: "otelcollect"
+    effect: "NoExecute"
+
+affinity: {}
+
+# ── Resource limits ───────────────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# ── Security context — matches kube-state-metrics exactly ────────────────────
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+  seccompProfile:
+    type: RuntimeDefault
+
+# ── Probes ────────────────────────────────────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  timeoutSeconds: 5
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  timeoutSeconds: 5
+
+# ── HorizontalPodAutoscaler ───────────────────────────────────────────────────
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── PodDisruptionBudget ───────────────────────────────────────────────────────
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# ── Pod annotations ───────────────────────────────────────────────────────────
+# cAdvisor runs in each keystone namespace and automatically scrapes all pods —
+# no ServiceMonitor or prometheus annotations needed.
+podAnnotations: {}
+
+# ── Extra pod labels ──────────────────────────────────────────────────────────
+podLabels: {}
