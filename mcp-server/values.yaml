@@ -25,7 +25,7 @@ image:
   # Registry + repo path matching your org's JFrog Artifactory convention:
   # docker.artifactory.<domain>.com/<org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_<appVersion>
   registry: docker.artifactory.<your-domain>.com
-  repository: <your-org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.5.0
+  repository: <your-org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.10.0-alpine
   # Tag = environment name, set by the build workflow (dev / non-prod / prod)
   tag: dev
   pullPolicy: Always

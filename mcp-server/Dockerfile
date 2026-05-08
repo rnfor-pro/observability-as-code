@@ -18,13 +18,13 @@ ARG BASE_IMAGE
 # public_org          = grafana
 # public_image_name   = mcp-grafana
 # public_image_version= 0.5.0
-FROM grafana/mcp-grafana:0.5.0
+FROM grafana/mcp-grafana:0.10.0-alpine
 
 # ── OCI labels — parsed by the grafana-mcp-build-push.yaml workflow ──────────
 # Label 1: image name  → extracted as IMAGE_NAME  by the workflow
 LABEL org.opencontainers.image.title="grafana-mcp"
 # Label 2: image version → extracted as IMAGE_VERSION by the workflow
-LABEL org.opencontainers.image.version="0.5.0"
+LABEL org.opencontainers.image.version="0.10.0-alpine"
 LABEL org.opencontainers.image.description="Grafana MCP Server — org wrapper image"
 LABEL org.opencontainers.image.source="https://github.com/<your-org>/obseng-keystone-infra"
 LABEL org.opencontainers.image.vendor="<your-org>"
