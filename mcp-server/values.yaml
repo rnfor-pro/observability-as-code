@@ -25,7 +25,7 @@ image:
   # Registry + repo path matching your org's JFrog Artifactory convention:
   # docker.artifactory.<domain>.com/<org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_<appVersion>
   registry: docker.artifactory.<your-domain>.com
-  repository: <your-org>/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.10.0-alpine
+  repository: sherwin-williams-co/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.11.0
   # Tag = environment name, set by the build workflow (dev / non-prod / prod)
   tag: dev
   pullPolicy: Always
@@ -62,6 +62,19 @@ grafana:
   # Name of the K8s Secret containing GRAFANA_SERVICE_ACCOUNT_TOKEN.
   # Created imperatively via kubectl (not committed to git).
   tokenSecret: grafana-mcp-token
+
+# ── Secret management ────────────────────────────────────────────────────────
+secret:
+  # create: true  → Helm renders the Secret from secret.grafanaToken below.
+  #                 Use for local dev bootstrap only. Never commit a real token.
+  # create: false → Secret is pre-created externally (kubectl or ESO).
+  #                 grafana.tokenSecret below must match the pre-existing name.
+  create: false
+
+  # Only used when secret.create is true.
+  # Pass at install time via --set secret.grafanaToken='<value>'
+  # Never store a real token in this file.
+  grafanaToken: ""
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logLevel: info

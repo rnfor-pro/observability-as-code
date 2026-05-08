@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "grafana-dev-local": {
+      "type": "streamable-http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}

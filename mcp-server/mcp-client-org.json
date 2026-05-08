@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "grafana-dev": {
+      "type": "streamable-http",
+      "url": "https://mcp-grafana-dev.<your-domain>.com/mcp"
+    },
+    "grafana-np": {
+      "type": "streamable-http",
+      "url": "https://mcp-grafana-np.<your-domain>.com/mcp"
+    },
+    "grafana-prod": {
+      "type": "streamable-http",
+      "url": "https://mcp-grafana-prod.<your-domain>.com/mcp"
+    }
+  }
+}
