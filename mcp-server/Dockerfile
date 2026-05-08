@@ -9,10 +9,10 @@ RUN apk --update add bash ca-certificates curl && \
     update-ca-certificates
 
 # ─── Stage 2: app ─────────────────────────────────────────────────────────────
-FROM grafana/mcp-grafana:0.10.0-alpine
+FROM grafana/mcp-grafana:0.11.0-alpine
 
 LABEL org.opencontainers.image.title="grafana-mcp"
-LABEL org.opencontainers.image.version="0.10.0-alpine"
+LABEL org.opencontainers.image.version="0.11.0"
 LABEL org.opencontainers.image.description="Grafana MCP Server — org wrapper image"
 LABEL org.opencontainers.image.source="https://github.com/<your-org>/obseng-keystone-infra"
 LABEL org.opencontainers.image.vendor="<your-org>"
