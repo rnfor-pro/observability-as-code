@@ -15,20 +15,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Locate Dockerfile
-        id: locate
-        run: |
-          DOCKERFILE=$(find mcp-server -name "Dockerfile" -type f | head -1)
-          if [ -z "$DOCKERFILE" ]; then
-            echo "::error::No Dockerfile found under mcp-server/"
-            exit 1
-          fi
-          BUILD_CONTEXT=$(dirname "$DOCKERFILE")
-          echo "DOCKERFILE=$DOCKERFILE"       >> "$GITHUB_OUTPUT"
-          echo "BUILD_CONTEXT=$BUILD_CONTEXT" >> "$GITHUB_OUTPUT"
-          echo "Found Dockerfile : $DOCKERFILE"
-          echo "Build context    : $BUILD_CONTEXT"
-
       - name: Log in to JFrog Docker Registry (for push)
         uses: <your-org-actions-repo>/sw-build-deploy-docker-image-composite-action@v1
         with:
@@ -36,60 +22,49 @@ jobs:
           image_registry_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           image_registry_api_key: ${{ secrets.ARTIFACTORY_API_KEY }}
 
-      - name: Parse image name and version from Dockerfile
+      - name: Parse all image LABELs from Dockerfile
         id: meta
         run: |
-          DOCKERFILE="${{ steps.locate.outputs.DOCKERFILE }}"
-
-          IMAGE_NAME=$(grep -m1 'org\.opencontainers\.image\.title' "$DOCKERFILE" \
-            | sed 's/.*title="\([^"]*\)".*/\1/')
-
-          IMAGE_VERSION=$(grep -m1 'org\.opencontainers\.image\.version' "$DOCKERFILE" \
-            | sed 's/.*version="\([^"]*\)".*/\1/')
-
-          if [ -z "$IMAGE_NAME" ]; then
-            echo "::error::Dockerfile missing: LABEL org.opencontainers.image.title"
-            exit 1
-          fi
-          if [ -z "$IMAGE_VERSION" ]; then
-            echo "::error::Dockerfile missing: LABEL org.opencontainers.image.version"
-            exit 1
-          fi
-
-          echo "IMAGE_NAME=$IMAGE_NAME"       >> "$GITHUB_OUTPUT"
-          echo "IMAGE_VERSION=$IMAGE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Parsed IMAGE_NAME    : $IMAGE_NAME"
-          echo "Parsed IMAGE_VERSION : $IMAGE_VERSION"
+          LABELS=$(awk '/^LABEL/ { $1=""; print substr($0,2) }' mcp-server/Dockerfile | tr -d '\r')
+          LABEL_LIST=""
+          while read -r line; do
+            for keyval in $line; do
+              key=$(echo $keyval | cut -d'=' -f1)
+              val=$(echo $keyval | cut -d'=' -f2- | tr -d '"')
+              if [[ "$key" == "org.opencontainers.image.title" ]]; then
+                echo "IMAGE_NAME=$val" >> $GITHUB_OUTPUT
+              fi
+              if [[ "$key" == "org.opencontainers.image.version" ]]; then
+                echo "IMAGE_VERSION=$val" >> $GITHUB_OUTPUT
+              fi
+              LABEL_LIST="$LABEL_LIST$key=$val;"
+            done
+          done <<< "$LABELS"
+          echo "ALL_LABELS=$LABEL_LIST" >> $GITHUB_OUTPUT
 
       - name: Build Docker image
         run: |
-          docker build \
-            -f "${{ steps.locate.outputs.DOCKERFILE }}" \
-            -t "${{ steps.meta.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.IMAGE_VERSION }}" \
-            "${{ steps.locate.outputs.BUILD_CONTEXT }}"
+          docker build -t ${{ steps.meta.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.IMAGE_VERSION }} mcp-server/.
 
       - name: Tag, Push for Each Env-Specific Tag, and Write/Update CSV
+        env:
+          REGISTRY: ${{ secrets.ARTIFACTORY_REGISTRY }}
+          REPO: sherwin-williams-co/obseng-keystone-infra
         run: |
           IMAGE_NAME="${{ steps.meta.outputs.IMAGE_NAME }}"
           IMAGE_VERSION="${{ steps.meta.outputs.IMAGE_VERSION }}"
-          REGISTRY="${{ secrets.ARTIFACTORY_REGISTRY }}"
-          REPO="${{ secrets.ARTIFACTORY_REPO }}"
-          DOCKERFILE="${{ steps.locate.outputs.DOCKERFILE }}"
-          CSV_FILE="images.csv"
-
-          LABELS=$(grep '^LABEL' "$DOCKERFILE" | tr '\n' ' ' | tr -d '\r')
-
+          CSV_FILE=images.csv
+          LABELS="${{ steps.meta.outputs.ALL_LABELS }}"
           if [ ! -f "$CSV_FILE" ]; then
-            echo "Image Name,Tag,Location,Labels" > "$CSV_FILE"
+            echo "Image Name,Tag,Location,Labels" > $CSV_FILE
           fi
-
           for ENV in dev non-prod prod; do
             REMOTE_REPO="$REGISTRY/$REPO/$IMAGE_NAME/${IMAGE_NAME}_${IMAGE_VERSION}"
             TAG="$ENV"
-            docker tag "$IMAGE_NAME:$IMAGE_VERSION" "$REMOTE_REPO:$TAG"
-            docker push "$REMOTE_REPO:$TAG"
-            if ! grep -q "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG" "$CSV_FILE"; then
-              echo "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG,\"$LABELS\"" >> "$CSV_FILE"
+            docker tag $IMAGE_NAME:$IMAGE_VERSION $REMOTE_REPO:$TAG
+            docker push $REMOTE_REPO:$TAG
+            if ! grep -q "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG" $CSV_FILE; then
+              echo "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG,\"$LABELS\"" >> $CSV_FILE
             fi
           done
 
