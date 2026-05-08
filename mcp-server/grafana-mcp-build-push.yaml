@@ -74,9 +74,9 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -f ${{ steps.locate.outputs.DOCKERFILE }} \
-            -t ${{ steps.meta.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.IMAGE_VERSION }} \
-            ${{ steps.locate.outputs.BUILD_CONTEXT }}
+            -f "${{ steps.locate.outputs.DOCKERFILE }}" \
+            -t "${{ steps.meta.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.IMAGE_VERSION }}" \
+            "${{ steps.locate.outputs.BUILD_CONTEXT }}"
 
       - name: Tag, Push for Each Env-Specific Tag, and Write/Update CSV
         env:
@@ -96,19 +96,10 @@ jobs:
             REMOTE_REPO="$REGISTRY/$REPO/$IMAGE_NAME/${IMAGE_NAME}_${IMAGE_VERSION}"
             TAG="$ENV"
 
-            docker tag $IMAGE_NAME:$IMAGE_VERSION $REMOTE_REPO:$TAG
-            docker push $REMOTE_REPO:$TAG
+            docker tag "$IMAGE_NAME:$IMAGE_VERSION" "$REMOTE_REPO:$TAG"
+            docker push "$REMOTE_REPO:$TAG"
 
-            if ! grep -q "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG" $CSV_FILE; then
-              echo "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG,\"$LABELS\"" >> $CSV_FILE
+            if ! grep -q "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG" "$CSV_FILE"; then
+              echo "$IMAGE_NAME,$TAG,$REMOTE_REPO:$TAG,\"$LABELS\"" >> "$CSV_FILE"
             fi
           done
-
-      - name: Commit and Push images.csv to repo
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git add images.csv
-          git commit -m "Update images.csv with latest grafana-mcp metadata" || echo "No changes to commit"
-          git pull origin ${{ github.ref_name }} --rebase || echo "No upstream changes"
-          git push origin ${{ github.ref_name }}
