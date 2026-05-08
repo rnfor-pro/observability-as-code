@@ -3,14 +3,9 @@ name: Build, Push & Retrieve Grafana MCP Image To/From JFrog
 on:
   push:
     branches: [ develop ]
-    # Triggers on every push to develop AND whenever anything inside
-    # mcp-server/ changes (Dockerfile, certs, context files).
-    # Removing the paths filter entirely would run on ALL file changes;
-    # keeping it scoped to mcp-server/ avoids unnecessary builds when
-    # only Helm chart values or manifests change.
     paths:
       - 'mcp-server/**'
-  workflow_dispatch:    # run on-demand from the GitHub Actions UI or gh CLI
+  workflow_dispatch:
 
 jobs:
   build-push-and-save:
@@ -20,10 +15,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Auto-locate the Dockerfile inside mcp-server/ ─────────────────────
-      # Uses `find` so the workflow keeps working even if the Dockerfile
-      # is moved to a subdirectory within mcp-server/ in the future.
-      # Fails fast with a clear message if no Dockerfile is found.
       - name: Locate Dockerfile
         id: locate
         run: |
@@ -34,16 +25,14 @@ jobs:
             exit 1
           fi
 
-          # Derive the build context dir from the Dockerfile location
           BUILD_CONTEXT=$(dirname "$DOCKERFILE")
 
-          echo "DOCKERFILE=$DOCKERFILE"         >> $GITHUB_OUTPUT
-          echo "BUILD_CONTEXT=$BUILD_CONTEXT"   >> $GITHUB_OUTPUT
+          echo "DOCKERFILE=$DOCKERFILE"       >> $GITHUB_OUTPUT
+          echo "BUILD_CONTEXT=$BUILD_CONTEXT" >> $GITHUB_OUTPUT
 
           echo "Found Dockerfile : $DOCKERFILE"
           echo "Build context    : $BUILD_CONTEXT"
 
-      # ── Log in to JFrog Artifactory ────────────────────────────────────────
       - name: Log in to JFrog Docker Registry (for push)
         uses: <your-org-actions-repo>/sw-build-deploy-docker-image-composite-action@v1
         with:
@@ -51,46 +40,36 @@ jobs:
           image_registry_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           image_registry_api_key: ${{ secrets.ARTIFACTORY_API_KEY }}
 
-      # ── Parse OCI labels from the located Dockerfile ───────────────────────
-      # Extracts org.opencontainers.image.title  → IMAGE_NAME
-      #          org.opencontainers.image.version → IMAGE_VERSION
-      #          all labels                       → ALL_LABELS (for CSV)
       - name: Parse all image LABELs from Dockerfile
         id: meta
         run: |
           DOCKERFILE="${{ steps.locate.outputs.DOCKERFILE }}"
-          LABELS=$(awk '/^LABEL/ { $1=""; print substr($0,2) }' "$DOCKERFILE" | tr -d '\r')
 
-          LABEL_LIST=""
-          while read -r line; do
-            for keyval in $line; do
-              key=$(echo $keyval | cut -d'=' -f1)
-              val=$(echo $keyval | cut -d'=' -f2- | tr -d '"')
+          IMAGE_NAME=$(grep -m1 'org\.opencontainers\.image\.title' "$DOCKERFILE" \
+            | sed 's/.*org\.opencontainers\.image\.title="\([^"]*\)".*/\1/')
 
-              if [[ "$key" == "org.opencontainers.image.title" ]]; then
-                echo "IMAGE_NAME=$val" >> $GITHUB_OUTPUT
-              fi
-              if [[ "$key" == "org.opencontainers.image.version" ]]; then
-                echo "IMAGE_VERSION=$val" >> $GITHUB_OUTPUT
-              fi
+          IMAGE_VERSION=$(grep -m1 'org\.opencontainers\.image\.version' "$DOCKERFILE" \
+            | sed 's/.*org\.opencontainers\.image\.version="\([^"]*\)".*/\1/')
 
-              LABEL_LIST="$LABEL_LIST$key=$val;"
-            done
-          done <<< "$LABELS"
-
-          echo "ALL_LABELS=$LABEL_LIST" >> $GITHUB_OUTPUT
-
-          # Fail early if either required label is missing from the Dockerfile
-          if [ -z "$(grep IMAGE_NAME $GITHUB_OUTPUT)" ]; then
-            echo "::error::Dockerfile is missing LABEL org.opencontainers.image.title"
-            exit 1
-          fi
-          if [ -z "$(grep IMAGE_VERSION $GITHUB_OUTPUT)" ]; then
-            echo "::error::Dockerfile is missing LABEL org.opencontainers.image.version"
+          if [ -z "$IMAGE_NAME" ]; then
+            echo "::error::Dockerfile is missing: LABEL org.opencontainers.image.title=\"<name>\""
             exit 1
           fi
 
-      # ── Build Docker image from the auto-located context ───────────────────
+          if [ -z "$IMAGE_VERSION" ]; then
+            echo "::error::Dockerfile is missing: LABEL org.opencontainers.image.version=\"<version>\""
+            exit 1
+          fi
+
+          ALL_LABELS=$(grep '^LABEL' "$DOCKERFILE" | tr -d '\r' | tr '\n' ';')
+
+          echo "IMAGE_NAME=$IMAGE_NAME"       >> $GITHUB_OUTPUT
+          echo "IMAGE_VERSION=$IMAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "ALL_LABELS=$ALL_LABELS"       >> $GITHUB_OUTPUT
+
+          echo "Parsed IMAGE_NAME    : $IMAGE_NAME"
+          echo "Parsed IMAGE_VERSION : $IMAGE_VERSION"
+
       - name: Build Docker image
         run: |
           docker build \
@@ -98,7 +77,6 @@ jobs:
             -t ${{ steps.meta.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.IMAGE_VERSION }} \
             ${{ steps.locate.outputs.BUILD_CONTEXT }}
 
-      # ── Tag, Push for each environment, write/update images.csv ───────────
       - name: Tag, Push for Each Env-Specific Tag, and Write/Update CSV
         env:
           REGISTRY: ${{ secrets.ARTIFACTORY_REGISTRY }}
@@ -125,7 +103,6 @@ jobs:
             fi
           done
 
-      # ── Commit images.csv back to repo ─────────────────────────────────────
       - name: Commit and Push images.csv to repo
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
