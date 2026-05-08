@@ -5,6 +5,7 @@ on:
     branches: [ develop ]
     paths:
       - 'mcp-server/**'
+      - '.github/workflows/grafana-mcp-build-push.yaml'
   workflow_dispatch:
 
 jobs:
