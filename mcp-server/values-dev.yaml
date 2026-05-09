@@ -23,7 +23,13 @@ mcp:
   metrics: true
 
 logLevel: info
-replicaCount: 2
+replicaCount: 1
+
+# ── Node scheduling ───────────────────────────────────────────────────────────
+# Cleared for local dev — no specific node pool required.
+# Restore agentpool: otelcollect for np/prod deployments.
+nodeSelector: {}
+tolerations: []
 
 # ── Ingress disabled while waiting for DNS provisioning ───────────────────────
 # Set enabled: true and fill in host/tlsSecretName once DNS is ready.
@@ -44,3 +50,7 @@ ingress:
 
 secret:
   create: false
+
+# ── Disable autoscaling for local dev ────────────────────────────────────────
+autoscaling:
+  enabled: false
