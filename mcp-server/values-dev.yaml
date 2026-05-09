@@ -1,16 +1,46 @@
+# ── Dev environment overrides ─────────────────────────────────────────────────
+# These values override values.yaml for the dev-keystone namespace.
+# Run with:
+#   helm upgrade --install grafana-mcp ./mcp-server \
+#     --namespace dev-keystone \
+#     -f mcp-server/ci/values-dev.yaml
+
 environment: dev
 
 image:
+  registry: docker.artifactory.<your-domain>.com
+  repository: sherwin-williams-co/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.11.0
   tag: dev
 
 grafana:
   url: http://grafana.dev-keystone.svc.cluster.local:3000
+  forwardHeaders: false
+  tokenSecret: grafana-mcp-token
 
 mcp:
+  transport: streamable-http
   disableWrite: true
+  metrics: true
 
 logLevel: info
+replicaCount: 2
 
+# ── Ingress disabled while waiting for DNS provisioning ───────────────────────
+# Set enabled: true and fill in host/tlsSecretName once DNS is ready.
+# Test locally in the meantime using:
+#   kubectl port-forward -n dev-keystone svc/grafana-mcp 8080:80
 ingress:
+  enabled: false
+  className: nginx
+  clusterIssuer: vault-issuer
   host: mcp-grafana-dev.<your-domain>.com
   tlsSecretName: grafana-mcp-dev-tls-secret
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+secret:
+  create: false
