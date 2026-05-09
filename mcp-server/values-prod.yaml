@@ -1,0 +1,44 @@
+# ── Prod environment overrides ────────────────────────────────────────────────
+# These values override values.yaml for the prod-keystone namespace.
+# Run with:
+#   helm upgrade --install grafana-mcp ./mcp-server \
+#     --namespace prod-keystone \
+#     -f mcp-server/ci/values-prod.yaml
+
+environment: prod
+
+image:
+  registry: docker.artifactory.<your-domain>.com
+  repository: sherwin-williams-co/obseng-keystone-infra/grafana-mcp/grafana-mcp_0.11.0
+  tag: prod
+
+grafana:
+  url: http://grafana.prod-keystone.svc.cluster.local:3000
+  forwardHeaders: false
+  tokenSecret: grafana-mcp-token
+
+mcp:
+  transport: streamable-http
+  # prod: always read-only — non-negotiable
+  disableWrite: true
+  metrics: true
+
+# prod: less verbose logging
+logLevel: warn
+replicaCount: 2
+
+ingress:
+  enabled: true
+  className: nginx
+  clusterIssuer: vault-issuer
+  host: mcp-grafana-prod.<your-domain>.com
+  tlsSecretName: grafana-mcp-prod-tls-secret
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+secret:
+  create: false
