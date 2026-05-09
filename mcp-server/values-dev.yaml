@@ -1,0 +1,16 @@
+environment: dev
+
+image:
+  tag: dev
+
+grafana:
+  url: http://grafana.dev-keystone.svc.cluster.local:3000
+
+mcp:
+  disableWrite: true
+
+logLevel: info
+
+ingress:
+  host: mcp-grafana-dev.<your-domain>.com
+  tlsSecretName: grafana-mcp-dev-tls-secret
