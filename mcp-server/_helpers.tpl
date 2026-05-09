@@ -1,13 +1,25 @@
 {{/*
-Expand the name of the chart.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  grafana-mcp — Template Helpers
+  All named templates defined here are available to every
+  template file in this chart via {{ include "..." . }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/}}
+
+{{/*
+────────────────────────────────────────────────────────────
+  grafana-mcp.name
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+
 {{/*
-Create a default fully qualified app name.
-Truncate at 63 chars because some Kubernetes name fields are limited to this.
+────────────────────────────────────────────────────────────
+  grafana-mcp.fullname
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.fullname" -}}
 {{- if .Values.fullnameOverride }}
@@ -22,15 +34,21 @@ Truncate at 63 chars because some Kubernetes name fields are limited to this.
 {{- end }}
 {{- end }}
 
+
 {{/*
-Create chart label value.
+────────────────────────────────────────────────────────────
+  grafana-mcp.chart
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+
 {{/*
-Common labels — applied to every resource.
+────────────────────────────────────────────────────────────
+  grafana-mcp.labels
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.labels" -}}
 helm.sh/chart: {{ include "grafana-mcp.chart" . }}
@@ -42,23 +60,32 @@ app.kubernetes.io/component: mcp-server
 environment: {{ .Values.environment }}
 {{- end }}
 
+
 {{/*
-Selector labels — used in matchLabels (must be stable, never change after first deploy).
+────────────────────────────────────────────────────────────
+  grafana-mcp.selectorLabels
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "grafana-mcp.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+
 {{/*
-Full image reference — registry/repository:tag
+────────────────────────────────────────────────────────────
+  grafana-mcp.image
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.image" -}}
 {{- printf "%s/%s:%s" .Values.image.registry .Values.image.repository .Values.image.tag }}
 {{- end }}
 
+
 {{/*
-ServiceAccount name.
+────────────────────────────────────────────────────────────
+  grafana-mcp.serviceAccountName
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
@@ -68,10 +95,25 @@ ServiceAccount name.
 {{- end }}
 {{- end }}
 
+
 {{/*
-Build the args list for the MCP server container.
-Starts with transport, adds --metrics if enabled, --disable-write if set,
-then appends any entries from disabledTools.
+────────────────────────────────────────────────────────────
+  grafana-mcp.secretName
+────────────────────────────────────────────────────────────
+*/}}
+{{- define "grafana-mcp.secretName" -}}
+{{- if .Values.secret.create }}
+{{- printf "%s-token" (include "grafana-mcp.fullname" .) }}
+{{- else }}
+{{- .Values.grafana.tokenSecret | required "grafana.tokenSecret must be set when secret.create is false" }}
+{{- end }}
+{{- end }}
+
+
+{{/*
+────────────────────────────────────────────────────────────
+  grafana-mcp.args
+────────────────────────────────────────────────────────────
 */}}
 {{- define "grafana-mcp.args" -}}
 - "-t"
