@@ -50,7 +50,7 @@ spec:
             {{- include "grafana-mcp.args" . | nindent 12 }}
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: 8000
               protocol: TCP
             - name: metrics
               containerPort: 9090
@@ -59,7 +59,7 @@ spec:
             - configMapRef:
                 name: {{ include "grafana-mcp.fullname" . }}-config
             - secretRef:
-                name: {{ .Values.grafana.tokenSecret }}
+                name: {{ include "grafana-mcp.secretName" . }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:

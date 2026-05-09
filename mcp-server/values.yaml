@@ -93,7 +93,7 @@ strategy:
 service:
   type: ClusterIP
   port: 80
-  targetPort: 8080
+  targetPort: 8000
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
 ingress:
@@ -118,19 +118,12 @@ serviceAccount:
   automountServiceAccountToken: false
   annotations: {}
 
-# ── Node scheduling — matches kube-state-metrics pattern ─────────────────────
-nodeSelector:
-  agentpool: otelcollect
+# ── Node scheduling ───────────────────────────────────────────────────────────
+# Set agentpool: otelcollect in ci/values-non-prod.yaml and ci/values-prod.yaml
+# Leave empty here so dev works without a specific node pool
+nodeSelector: {}
 
-tolerations:
-  - key: "agentpool"
-    operator: "Equal"
-    value: "otelcollect"
-    effect: "NoSchedule"
-  - key: "agentpool"
-    operator: "Equal"
-    value: "otelcollect"
-    effect: "NoExecute"
+tolerations: []
 
 affinity: {}
 
